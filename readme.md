@@ -16,10 +16,14 @@ The hashtag shown before the code in the chat, is not saved inside the users fil
 contact me if you have any problems: rootamin@outlook.com
 
 <hr>
+
+
 ![minebuddymod1](https://rootamin.github.io/minebudmod1.png)
 ![minebuddymod2](https://rootamin.github.io/minebudmod2.png)
 ![minebuddymod3](https://rootamin.github.io/minebudmod3.png)
+
 <hr>
+
 Changelogs:
 ```
 -2.0.0: failsafe: a codes.txt file will appear inside config directory. every newly generated code, will get checked whether there are same code as it is inside the codes.txt or not. if they are similar codes, it would generate another code and repeat the same process.(this has not been tested properly)
