@@ -1,5 +1,7 @@
 package ir.rootamin.minebud;
 
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.server.ServerStartCallback;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -9,12 +11,16 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 
 import java.io.*;
+import java.lang.reflect.Type;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 public class MineBud implements ModInitializer {
 	public static final String MOD_ID = "minebud";
+	private Map<String, String> playerCodes = new HashMap<>();
 	private Set<String> usedCodes = new HashSet<>();
 
 	@Override
@@ -22,16 +28,14 @@ public class MineBud implements ModInitializer {
 		// Get the config directory
 		Path configDir = FabricLoader.getInstance().getConfigDir();
 
-		// Load used codes from file
-		File codesFile = new File(configDir.toFile(), "codes.txt");
-		if (codesFile.exists()) {
-			try (BufferedReader reader = new BufferedReader(new FileReader(codesFile))) {
-				String line;
-				while ((line = reader.readLine()) != null) {
-					usedCodes.add(line);
-				}
+		// Load player codes from JSON file
+		File playerCodesFile = new File(configDir.toFile(), "playerCodes.json");
+		if (playerCodesFile.exists()) {
+			try (Reader reader = new FileReader(playerCodesFile)) {
+				Type type = new TypeToken<Map<String, String>>(){}.getType();
+				playerCodes = new Gson().fromJson(reader, type);
 			} catch (IOException e) {
-				System.out.println("An error occurred while loading the used codes.");
+				System.out.println("An error occurred while loading the player codes.");
 				e.printStackTrace();
 			}
 		}
@@ -40,16 +44,18 @@ public class MineBud implements ModInitializer {
 			ServerPlayerEntity player = handler.player;
 
 			// Check if the player has joined before
-			File playerFile = new File(configDir.toFile(), "players/" + player.getName().getString() + ".txt");
-			if (!playerFile.exists()) {
+			if (!playerCodes.containsKey(player.getName().getString())) {
 				// Generate a unique code for the player
 				String uniqueCode = generateUniqueCode();
 
-				// Save the code to a file
-				try (PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(playerFile)))) {
-					out.println(player.getName().getString() + ":" + uniqueCode);
+				// Save the code to the map
+				playerCodes.put(player.getName().getString(), uniqueCode);
+
+				// Save the map to the JSON file
+				try (Writer writer = new FileWriter(playerCodesFile)) {
+					new Gson().toJson(playerCodes, writer);
 				} catch (IOException e) {
-					System.out.println("An error occurred while saving the player's code.");
+					System.out.println("An error occurred while saving the player codes.");
 					e.printStackTrace();
 				}
 			}
@@ -59,24 +65,11 @@ public class MineBud implements ModInitializer {
 			server.getCommandManager().getDispatcher().register(CommandManager.literal("showcode").executes(context -> {
 				ServerPlayerEntity player = context.getSource().getPlayer();
 
-				// Read the player's code from the file
-				// Check if the player has joined before
-				File playerDir = new File(configDir.toFile(), "players");
-				if (!playerDir.exists()) {
-					playerDir.mkdirs();
-				}
-				File playerFile = new File(configDir.toFile(), "players/" + player.getName().getString());
-				try (BufferedReader reader = new BufferedReader(new FileReader(playerFile))) {
-					String line = reader.readLine();
-					String[] parts = line.split(":");
-					String code = parts[1];
+				// Get the player's code from the map
+				String code = playerCodes.get(player.getName().getString());
 
-					// Send the code to the player
-					player.sendMessage(Text.of("Your code is: #" + code), false);
-				} catch (IOException e) {
-					System.out.println("An error occurred while reading the player's code.");
-					e.printStackTrace();
-				}
+				// Send the code to the player
+				player.sendMessage(Text.of("Your code is: #" + code), false);
 
 				return 1;
 			}));
@@ -87,17 +80,12 @@ public class MineBud implements ModInitializer {
 				// Generate a new unique code for the player
 				String uniqueCode = generateUniqueCode();
 
-				// Save the new code to the player's file
-				// Check if the player has joined before
-				File playerDir = new File(configDir.toFile(), "players");
-				if (!playerDir.exists()) {
-					playerDir.mkdirs();
-				}
-				File playerFile = new File(configDir.toFile(), "players/" + player.getName().getString());
-				try (PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(playerFile)))) {
-					out.println(player.getName().getString() + ":" + uniqueCode);
+				// Save the new code to the map and JSON file
+				playerCodes.put(player.getName().getString(), uniqueCode);
+				try (Writer writer = new FileWriter(playerCodesFile)) {
+					new Gson().toJson(playerCodes, writer);
 				} catch (IOException e) {
-					System.out.println("An error occurred while saving the player's code.");
+					System.out.println("An error occurred while saving the player codes.");
 					e.printStackTrace();
 				}
 
@@ -110,6 +98,20 @@ public class MineBud implements ModInitializer {
 	}
 
 	private String generateUniqueCode() {
+		// Load used codes from file
+		File codesFile = new File(FabricLoader.getInstance().getConfigDir().toFile(), "codes.txt");
+		if (codesFile.exists()) {
+			try (BufferedReader reader = new BufferedReader(new FileReader(codesFile))) {
+				String line;
+				while ((line = reader.readLine()) != null) {
+					usedCodes.add(line);
+				}
+			} catch (IOException e) {
+				System.out.println("An error occurred while loading the used codes.");
+				e.printStackTrace();
+			}
+		}
+
 		String uniqueCode;
 		do {
 			// Generate a random alphanumeric string between 6 and 10 characters long
@@ -125,7 +127,6 @@ public class MineBud implements ModInitializer {
 		usedCodes.add(uniqueCode);
 
 		// Save the newly generated code to codes.txt
-		File codesFile = new File(FabricLoader.getInstance().getConfigDir().toFile(), "codes.txt");
 		try (PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(codesFile, true)))) {
 			out.println(uniqueCode);
 		} catch (IOException e) {
